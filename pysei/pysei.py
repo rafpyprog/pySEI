@@ -26,9 +26,9 @@ class ProcessoSei(PageElement):
     @property
     def metadata(self):
         metadata = {}
-        url = [i for i in procSei.acoes if 'consultar' in i][0]
+        url = [i for i in self.acoes if 'consultar' in i][0]
         html = self.session.get(url).text
-        soup = procSei.get_soup(html)
+        soup = self.get_soup(html)
 
         sel_assuntos = soup.find('select', {'id': 'selAssuntos'})
         assuntos = [i.text for i in sel_assuntos.find_all('option')]
@@ -81,7 +81,7 @@ class ProcessoSei(PageElement):
         self._download(filetype='zip', filename=filename)
 
     def _download(self, filetype, filename='download_sei.pdf'):
-        url = [i for i in procSei.acoes if filetype in i][0]
+        url = [i for i in self.acoes if filetype in i][0]
         r = self.session.get(url)
         soup = self.get_soup(r.content)
         url_gera_pdf = URL_SEI + soup.find('form')['action']
