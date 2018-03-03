@@ -1,5 +1,8 @@
-.ipynb_checkpoints
+/.cache
+/.ipynb_checkpoints
+/.pytest_cache
+.coverage
+pysei.egg-info
 __pycache__
 /estatistica
-/.cache
 *.ipynb
