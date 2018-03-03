@@ -118,8 +118,6 @@ class ResultadoPesquisa(PageElement):
         super().__init__(session, html)
 
 
-
-
 class Documento():
     def __init__(self, session, attributes: str):
         self.session = session

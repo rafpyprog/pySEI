@@ -10,6 +10,13 @@ def test_login_sei():
     login_status = sei.login(nu_cpf, pwd_sei)
     assert login_status == True
 
+
+def test_login_dados_invalidos_sei():
+    sei = SEI()
+    login_status = sei.login('00000000000', pwd_sei)
+    assert login_status == False
+
+
 def test_acessa_tela_pesquisa():
     sei = SEI()
     login_status = sei.login(nu_cpf, pwd_sei)
