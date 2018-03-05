@@ -1,6 +1,9 @@
 /.cache
+/.eggs
 /.ipynb_checkpoints
 /.pytest_cache
+/build
+/dist
 .coverage
 pysei.egg-info
 __pycache__
