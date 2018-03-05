@@ -4,7 +4,7 @@
 pySEI
 =====
 
-.. image:: https://img.shields.io/travis/rafpyprog/pysei.svg
+.. image:: https://img.shields.io/travis/rafpyprog/pySEI.svg
    :target: https://travis-ci.org/rafpyprog/pySEI
 
 .. image:: https://img.shields.io/codecov/c/github/rafpyprog/pysei.svg
