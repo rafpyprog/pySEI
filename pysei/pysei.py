@@ -192,7 +192,7 @@ class SEI():
 
         # 2 - Captura o hndCaptcha'
         r = self.session.get(url_login_php)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        soup = BeautifulSoup(r.text, 'lxml')
         hdn_captcha = soup.find('input', {'id': 'hdnCaptcha'})['value']
 
         #3 - Envia o form de Login'
@@ -205,7 +205,7 @@ class SEI():
         r = self.session.post(url_login_php, data=data, verify=False)
 
         try:
-            soup = BeautifulSoup(r.content, 'html.parser')
+            soup = BeautifulSoup(r.content, 'lxml')
             self.user = soup.find('a', {'id': 'lnkUsuarioSistema'})['title']
         except:
             print('Erro no login')
