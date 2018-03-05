@@ -1,1 +1,1 @@
-from .pysei import SEI
+from .pysei import SEI, ResultadoPesquisa, ProcessoSei

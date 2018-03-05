@@ -1,5 +1,7 @@
 import re
 from bs4 import BeautifulSoup
+from concurrent.futures import wait, as_completed, Future
+from requests_futures.sessions import FuturesSession
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
@@ -7,6 +9,7 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 URL_SEI = 'https://seimp.planejamento.gov.br/sei/'
+
 
 class PageElement():
     url = URL_SEI
@@ -21,13 +24,15 @@ class PageElement():
 class ProcessoSei(PageElement):
     def __init__(self, session, html):
         super().__init__(session, html)
-        self.parse_arvore()
+        self._arvore = None
+        self._acoes = None
+        self._documentos = {}
 
     @property
     def metadata(self):
         metadata = {}
         url = [i for i in self.acoes if 'consultar' in i][0]
-        html = self.session.get(url).text
+        html = self.session.get(url, verify=False, timeout=60).text
         soup = self.get_soup(html)
 
         sel_assuntos = soup.find('select', {'id': 'selAssuntos'})
@@ -54,21 +59,38 @@ class ProcessoSei(PageElement):
         metadata['documentos'] = self.documentos
         return metadata
 
-    def parse_arvore(self):
-        url = self.url + self.soup.find('iframe', {'id': 'ifrArvore'})['src']
-        r = self.session.get(url)
-        html = r.text
-        pattern = '(?<=Nos\[[0-999]\] = new infraArvoreNo\().*(?=\))'
-        nos = re.findall(pattern, html)
-        nos_arvore = nos[1:]
+    @property
+    def arvore(self):
+        if self._arvore is None:
+            url = URL_SEI + self.soup.find('iframe', {'id': 'ifrArvore'})['src']
+            r = self.session.get(url, verify=False, timeout=60)
+            self._arvore = r.text
+        return self._arvore
 
-        acoes = re.search('(?<=Nos\[0\].acoes = \').*', html).group()
-        self.acoes = [URL_SEI + i for
-                      i in re.findall('(?<=href=").*?(?="\stabindex)',acoes)]
+    @property
+    def acoes(self):
+        if self._acoes is None:
+            HTML = self.arvore
+            acoes = re.search('(?<=Nos\[0\].acoes = \').*', HTML).group()
+            self._acoes = [URL_SEI + i for
+                           i in re.findall('(?<=href=").*?(?="\stabindex)', acoes)]
+        return self._acoes
 
-        pattern_urls = ('(?<=Nos\[[0-999]\].src\s=\s\').*(?=\';)')
-        urls_arvore = re.findall(pattern_urls, html)[1:]
-        self._documentos = ['",'.join(i) for i in zip(nos_arvore, urls_arvore)]
+    @property
+    def documentos(self):
+        if self._documentos == {}:
+            HTML = self.arvore
+
+            pattern_urls = ('(?<=Nos\[[0-999]\].src\s=\s\').*(?=\';)')
+            urls_arvore = re.findall(pattern_urls, HTML)[1:]
+
+            pattern = '(?<=Nos\[[0-999]\] = new infraArvoreNo\().*(?=\))'
+            nos_arvore = re.findall(pattern, HTML)[1:]
+
+            for i in ['",'.join(i) for i in zip(nos_arvore, urls_arvore)]:
+                doc = Documento(self.session, i)
+                self._documentos[doc.number] = doc
+        return self._documentos
 
     def download_pdf(self, filename=None):
         if filename is None:
@@ -82,7 +104,7 @@ class ProcessoSei(PageElement):
 
     def _download(self, filetype, filename='download_sei.pdf'):
         url = [i for i in self.acoes if filetype in i][0]
-        r = self.session.get(url)
+        r = self.session.get(url, verify=False, timeout=60)
         soup = self.get_soup(r.content)
         url_gera_pdf = URL_SEI + soup.find('form')['action']
         # params para o post
@@ -93,9 +115,9 @@ class ProcessoSei(PageElement):
 
         for n, item in enumerate(params['hdnInfraItens'].split(',')):
             params['chkInfraItem{}'.format(n)] = item
-        r = self.session.post(url_gera_pdf, params)
+        r = self.session.post(url_gera_pdf, verify=False, params, timeout=60)
         url_pdf = re.search('(?<=window.open\(\').*(?=\'\))', r.text).group()
-        r = self.session.get(URL_SEI + url_pdf)
+        r = self.session.get(URL_SEI + url_pdf, verify=False, timeout=120)
         DOWNLOAD_CONTENT = r.content
 
         if r.headers.get('Content-Disposition', None) is not None:
@@ -103,14 +125,6 @@ class ProcessoSei(PageElement):
 
         with open(filename, 'wb') as f:
             f.write(DOWNLOAD_CONTENT)
-
-    @property
-    def documentos(self):
-        docs = {}
-        for i in self._documentos:
-            doc = Documento(self.session, i)
-            docs[doc.number] = doc
-        return docs
 
 
 class ResultadoPesquisa(PageElement):
@@ -165,6 +179,7 @@ class SEI():
     url = URL_SEI
     def __init__(self):
         self.session = requests.Session()
+        self._form_url = None
 
     def login(self, nu_cpf, password):
         self.nu_cpf = nu_cpf
@@ -209,13 +224,23 @@ class SEI():
         soup = BeautifulSoup(self.html, 'lxml')
         menu = soup.find('ul', {'id': 'main-menu'}).find_all('a')[3]
         url_pesquisa = self.url + menu['href']
-        r = self.session.get(url_pesquisa)
+        r = self.session.get(url_pesquisa, verify=False)
         self.html = r.text
+
+    @property
+    def form_URL(self):
+        if self._form_url is None:
+            self._form_url = self.get_form_URL()
+        return self._form_url
+
+    def get_form_URL(self):
+        self.acessa_tela_pesquisa()
+        soup = BeautifulSoup(self.html, 'lxml')
+        url_pesquisa = soup.find('form', {'id': 'frmPesquisaProtocolo'})['action']
+        return self.url + url_pesquisa
 
     def pesquisa(self, query='', nu_sei='', doc_gerados=True,
                  doc_recebidos=True, com_tramitacao=False):
-        self.acessa_tela_pesquisa()
-
         data = {
             'q': query,
             'sbmPesquisar':'Pesquisar',
@@ -254,14 +279,11 @@ class SEI():
         if com_tramitacao:
             data['chkSinProcessosTramitacao'] = 'S'
 
-        soup = BeautifulSoup(self.html, 'lxml')
-        url_pesquisa = soup.find('form', {'id': 'frmPesquisaProtocolo'})['action']
 
-        r = self.session.post(self.url + url_pesquisa, data=data,
-                              allow_redirects=False)
+        r = self.session.post(self.form_URL, data=data, allow_redirects=False)
         processo_SEI = r.headers.get('Location', None)
         if processo_SEI:
-            url_dados_processo = self.url + r.headers['Location']
+            url_dados_processo = self.url + processo_SEI
             r = self.session.get(url_dados_processo)
             return ProcessoSei(self.session, r.text)
         else:
