@@ -115,7 +115,7 @@ class ProcessoSei(PageElement):
 
         for n, item in enumerate(params['hdnInfraItens'].split(',')):
             params['chkInfraItem{}'.format(n)] = item
-        r = self.session.post(url_gera_pdf, verify=False, params, timeout=60)
+        r = self.session.post(url_gera_pdf, verify=False, data=params, timeout=60)
         url_pdf = re.search('(?<=window.open\(\').*(?=\'\))', r.text).group()
         r = self.session.get(URL_SEI + url_pdf, verify=False, timeout=120)
         DOWNLOAD_CONTENT = r.content
