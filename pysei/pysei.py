@@ -1,7 +1,5 @@
 import re
 from bs4 import BeautifulSoup
-from concurrent.futures import wait, as_completed, Future
-from requests_futures.sessions import FuturesSession
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
