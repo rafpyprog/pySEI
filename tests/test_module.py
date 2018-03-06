@@ -23,8 +23,8 @@ def test_login_dados_invalidos_sei():
 def test_acessa_tela_pesquisa():
     sei = SEI()
     login_status = sei.login(nu_cpf, pwd_sei)
-    sei.acessa_tela_pesquisa()
-    assert 'Pesquisar em' in sei.html
+    html = sei.acessa_tela_pesquisa()
+    assert 'Pesquisar em' in html
 
 
 def test_pesquisa():
@@ -32,7 +32,7 @@ def test_pesquisa():
     login_status = sei.login(nu_cpf, pwd_sei)
     query = 'Rafael'
     pesquisa = sei.pesquisa(query)
-    assert query in pesquisa.soup.text
+    assert query in pesquisa.HTML
 
 
 def test_retorna_resultado_pesquisa():

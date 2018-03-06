@@ -1,3 +1,4 @@
+import os
 import re
 from bs4 import BeautifulSoup
 import requests
@@ -9,19 +10,11 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 URL_SEI = 'https://seimp.planejamento.gov.br/sei/'
 
 
-class PageElement():
-    url = URL_SEI
-    def __init__(self, session, html):
+
+class ProcessoSei():
+    def __init__(self, session, HTML):
         self.session = session
-        self.soup = self.get_soup(html)
-
-    def get_soup(self, html):
-        return BeautifulSoup(html, 'lxml')
-
-
-class ProcessoSei(PageElement):
-    def __init__(self, session, html):
-        super().__init__(session, html)
+        self.HTML = HTML
         self._arvore = None
         self._acoes = None
         self._documentos = {}
@@ -30,28 +23,28 @@ class ProcessoSei(PageElement):
     def metadata(self):
         metadata = {}
         url = [i for i in self.acoes if 'consultar' in i][0]
-        html = self.session.get(url, verify=False, timeout=60).text
-        soup = self.get_soup(html)
+        HTML = self.session.get(url, verify=False, timeout=60).text
+        data_HTML = BeautifulSoup(HTML, 'lxml')
 
-        sel_assuntos = soup.find('select', {'id': 'selAssuntos'})
+        sel_assuntos = data_HTML.find('select', {'id': 'selAssuntos'})
         assuntos = [i.text for i in sel_assuntos.find_all('option')]
         metadata['assuntos'] = assuntos
 
-        sel_interessado = soup.find('select', {'id': 'selInteressadosProcedimento'})
+        sel_interessado = data_HTML.find('select', {'id': 'selInteressadosProcedimento'})
         interessados = [i.text for i in sel_interessado.find_all('option')]
         metadata['interessados'] = interessados
 
-        especificacao = soup.find('input', {'id': 'txtDescricao'})['value']
+        especificacao = data_HTML.find('input', {'id': 'txtDescricao'})['value']
         metadata['especificacao'] = especificacao
 
-        select_tipo = soup.find('select', {'id': 'selTipoProcedimento'})
+        select_tipo = data_HTML.find('select', {'id': 'selTipoProcedimento'})
         tipo = select_tipo.find('option', {'selected': 'selected'}).text
         metadata['tipo'] = tipo
 
-        protocolo = soup.find('input', {'id': 'txtProtocoloExibir'})['value']
+        protocolo = data_HTML.find('input', {'id': 'txtProtocoloExibir'})['value']
         metadata['protocolo'] = protocolo
 
-        dt_autuacao = soup.find('input', {'id': 'txtDtaGeracaoExibir'})['value']
+        dt_autuacao = data_HTML.find('input', {'id': 'txtDtaGeracaoExibir'})['value']
         metadata['data_autuacao'] = dt_autuacao
 
         metadata['documentos'] = self.documentos
@@ -60,7 +53,10 @@ class ProcessoSei(PageElement):
     @property
     def arvore(self):
         if self._arvore is None:
-            url = URL_SEI + self.soup.find('iframe', {'id': 'ifrArvore'})['src']
+            soup = BeautifulSoup(self.HTML, 'lxml')
+            body = soup.html.find('body', recursive=False)
+            src = body.find('iframe', {'id': 'ifrArvore'})['src']
+            url = URL_SEI + src
             r = self.session.get(url, verify=False, timeout=60)
             self._arvore = r.text
         return self._arvore
@@ -95,15 +91,15 @@ class ProcessoSei(PageElement):
             filename = 'download_sei.pdf'
         self._download(filetype='pdf', filename=filename)
 
-    def download_zip(self, filename=None):
+    def download_zip(self, path=None, filename=None):
         if filename is None:
             filename = 'download_sei.zip'
-        self._download(filetype='zip', filename=filename)
+        self._download(filetype='zip', path=path, filename=filename)
 
-    def _download(self, filetype, filename='download_sei.pdf'):
+    def _download(self, filetype, path=None, filename='download_sei.pdf'):
         url = [i for i in self.acoes if filetype in i][0]
         r = self.session.get(url, verify=False, timeout=60)
-        soup = self.get_soup(r.content)
+        soup = BeautifulSoup(r.content, 'lxml').html.find('body', recursive=False)
         url_gera_pdf = URL_SEI + soup.find('form')['action']
         # params para o post
         params = {i['id']: i['value'] for
@@ -121,13 +117,17 @@ class ProcessoSei(PageElement):
         if r.headers.get('Content-Disposition', None) is not None:
             filename = r.headers.get('Content-Disposition').split('"')[-2]
 
+        if path is not None:
+            filename = os.path.join(path, filename)
+
         with open(filename, 'wb') as f:
             f.write(DOWNLOAD_CONTENT)
 
 
-class ResultadoPesquisa(PageElement):
-    def __init__(self, session, html):
-        super().__init__(session, html)
+class ResultadoPesquisa():
+    def __init__(self, session, HTML):
+        self.session = session
+        self.HTML = HTML
 
 
 class Documento():
@@ -223,7 +223,7 @@ class SEI():
         menu = soup.find('ul', {'id': 'main-menu'}).find_all('a')[3]
         url_pesquisa = self.url + menu['href']
         r = self.session.get(url_pesquisa, verify=False)
-        self.html = r.text
+        return r.text
 
     @property
     def form_URL(self):
@@ -232,8 +232,8 @@ class SEI():
         return self._form_url
 
     def get_form_URL(self):
-        self.acessa_tela_pesquisa()
-        soup = BeautifulSoup(self.html, 'lxml')
+        HTML = self.acessa_tela_pesquisa()
+        soup = BeautifulSoup(HTML, 'lxml')
         url_pesquisa = soup.find('form', {'id': 'frmPesquisaProtocolo'})['action']
         return self.url + url_pesquisa
 
