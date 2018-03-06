@@ -9,3 +9,4 @@ pysei.egg-info
 __pycache__
 /estatistica
 *.ipynb
+*.zip
